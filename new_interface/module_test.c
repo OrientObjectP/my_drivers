@@ -70,7 +70,7 @@ const struct file_operations test_fops = {
 
 
 
-static	int mydect = MKDEV(MYMAJOR,MYMINOR);
+static	dev_t mydect = MKDEV(MYMAJOR,MYMINOR);
 
 
 // 模块安装函数
