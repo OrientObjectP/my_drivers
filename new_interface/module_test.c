@@ -1,18 +1,25 @@
 #include <linux/module.h>		// module_init  module_exit
 #include <linux/init.h>			// __init   __exit
 #include <linux/fs.h>
-
+#include <linux/cdev.h>
 /*copy_from_user*/
 #include <linux/uaccess.h>
 
 
 
 #define MYNAME "module_test"
+#define MYMAJOR 200
+#define MYMINOR 0
+#define MYCOUNT 1
 
 #define MIN(x,y) ((x)<(y)?(x):(y))
 
 int ret;
 char mybuf[20];
+
+
+static struct cdev test_device_cdev;
+
 static int test_chrdev_open(struct inode *inode, struct file *file)
 {
 	//这个函数真正应该方的是打开这个设备的硬件操作代码部分
@@ -63,7 +70,7 @@ const struct file_operations test_fops = {
 
 
 
-
+static	int mydect = MKDEV(MYMAJOR,MYMINOR);
 
 
 // 模块安装函数
@@ -71,12 +78,35 @@ static int __init chrdev_init(void)
 {	
 	printk(KERN_ALERT "chrdev_init helloworld init\n");
 	
+	
+	int retval;
+	
 
-	ret = register_chrdev(0,MYNAME,&test_fops);    //驱动注册函数 需提供头文件 <include/fs.h>
-	if (!ret){
-		printk(KERN_INFO"register chrdev failed\n");	
+
+	//申请主设备号和次设备号
+	retval = register_chrdev_region(mydect, MYCOUNT, MYNAME);
+	if (retval) {
+		printk(KERN_ERR "Unable to register minors for test_device\n");
+		return 0;
 	}
-	printk(KERN_INFO "register chrdev succeed MAJOR=%d\n",ret);		
+	else
+		printk(KERN_ERR "register_chrdev_region is succeed\n");
+	
+	
+	//初始化cdev
+	cdev_init(&test_device_cdev,&test_fops);
+	printk(KERN_ERR "cdev_init is succeed\n");	
+	
+	//利用cdev结构体和主次设备号注册驱动
+	retval = cdev_add(&test_device_cdev, mydect, MYCOUNT);
+	if (retval) {
+		printk(KERN_ERR "Unable to get usb_device major %d\n",
+		       MYMAJOR);
+		return 0;
+	}
+	else
+		printk(KERN_ERR "cdev_add is succeed\n");
+
 	
 	return 0;
 }
@@ -84,9 +114,13 @@ static int __init chrdev_init(void)
 // 模块卸载函数
 static void __exit chrdev_exit(void)
 {
-	unregister_chrdev(ret, MYNAME);
-
 	printk(KERN_INFO "chrdev_exit helloworld exit\n");
+	
+	cdev_del(&test_device_cdev);
+	printk(KERN_ERR "cdev_del is succeed\n");	
+	
+	unregister_chrdev_region(mydect, MYCOUNT);	
+	printk(KERN_ERR "unregister_chrdev_region is succeed\n");	
 	
 }
 
