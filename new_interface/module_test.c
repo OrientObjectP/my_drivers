@@ -19,6 +19,7 @@ char mybuf[20];
 
 
 static struct cdev test_device_cdev;
+static	int mydect;
 
 static int test_chrdev_open(struct inode *inode, struct file *file)
 {
@@ -70,7 +71,7 @@ const struct file_operations test_fops = {
 
 
 
-static	dev_t mydect = MKDEV(MYMAJOR,MYMINOR);
+
 
 
 // 模块安装函数
@@ -83,15 +84,16 @@ static int __init chrdev_init(void)
 	
 
 
-	//申请主设备号和次设备号
-	retval = register_chrdev_region(mydect, MYCOUNT, MYNAME);
-	if (retval) {
-		printk(KERN_ERR "Unable to register minors for test_device\n");
+	//自动生成主设备号和次设备号
+	retval = alloc_chrdev_region(&mydect,0, MYCOUNT, MYNAME);
+	if (retval<0) {
+		printk(KERN_ERR "Unable to alloc minors for test_device\n");
 		return 0;
 	}
-	else
-		printk(KERN_ERR "register_chrdev_region is succeed\n");
-	
+	else {
+		printk(KERN_ERR "alloc_chrdev_region is succeed\n");
+		printk(KERN_ERR "MAJOR=%d,MINOR=%d\n",MAJOR(mydect),MINOR(mydect));		
+	}
 	
 	//初始化cdev
 	cdev_init(&test_device_cdev,&test_fops);
