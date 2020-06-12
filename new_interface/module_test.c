@@ -4,8 +4,8 @@
 #include <linux/cdev.h>
 /*copy_from_user*/
 #include <linux/uaccess.h>
-
-
+/*add create_device */
+#include<linux/device.h>
 
 #define MYNAME "module_test"
 #define MYMAJOR 200
@@ -20,6 +20,8 @@ char mybuf[20];
 
 static struct cdev test_device_cdev;
 static	int mydect;
+static struct class *test_dev_class;
+
 
 static int test_chrdev_open(struct inode *inode, struct file *file)
 {
@@ -109,6 +111,19 @@ static int __init chrdev_init(void)
 	else
 		printk(KERN_ERR "cdev_add is succeed\n");
 
+	//注册完成设备驱动后，添加设备类的操作，以让内核帮我们发信心给udev，让udev自动创建和删除设备文件
+	test_dev_class = class_create(THIS_MODULE, "solitude_test");
+	if (IS_ERR(test_dev_class))
+		return;
+	device_create(test_dev_class, NULL, mydect, NULL, "test");    //最后一个参数就是在/dev/xx下的文件名
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	return 0;
 }
@@ -123,6 +138,14 @@ static void __exit chrdev_exit(void)
 	
 	unregister_chrdev_region(mydect, MYCOUNT);	
 	printk(KERN_ERR "unregister_chrdev_region is succeed\n");	
+	
+	
+	//自动删除设备文件
+	device_destroy(test_dev_class, mydect);
+	class_destroy(test_dev_class);
+	
+	
+	
 	
 }
 
