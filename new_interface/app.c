@@ -5,10 +5,12 @@
 
 #define FILE "/dev/test"
 
-int main(void)
+int main(int argc,char * argv[])
 {
 	
-	int fd = open(FILE,O_RDWR);
+	
+	char *name = argv[1]; 
+	int fd = open(name,O_RDWR);
 	if (fd == -1){
 		printf("file open failed\n");
 	}

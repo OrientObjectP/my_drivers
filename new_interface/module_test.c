@@ -10,7 +10,7 @@
 #define MYNAME "module_test"
 #define MYMAJOR 200
 #define MYMINOR 0
-#define MYCOUNT 1
+#define MYCOUNT 3
 
 #define MIN(x,y) ((x)<(y)?(x):(y))
 
@@ -81,7 +81,6 @@ static int __init chrdev_init(void)
 {	
 	printk(KERN_ALERT "chrdev_init helloworld init\n");
 	
-	
 	int retval;
 	
 
@@ -115,15 +114,11 @@ static int __init chrdev_init(void)
 	test_dev_class = class_create(THIS_MODULE, "solitude_test");
 	if (IS_ERR(test_dev_class))
 		return;
-	device_create(test_dev_class, NULL, mydect, NULL, "test");    //最后一个参数就是在/dev/xx下的文件名
-	
-	
-	
-	
-	
-	
-	
-	
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 0), NULL, "test0");    //最后一个参数就是在/dev/xx下的文件名
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 1), NULL, "test1");
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 2), NULL, "test2");
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 3), NULL, "test3");
+		
 	
 	return 0;
 }
@@ -141,12 +136,13 @@ static void __exit chrdev_exit(void)
 	
 	
 	//自动删除设备文件
-	device_destroy(test_dev_class, mydect);
+	device_destroy(test_dev_class, MKDEV(MAJOR(mydect),MINOR(mydect) + 0));
+	device_destroy(test_dev_class, MKDEV(MAJOR(mydect),MINOR(mydect) + 1));	
+	device_destroy(test_dev_class, MKDEV(MAJOR(mydect),MINOR(mydect) + 2));	
+	device_destroy(test_dev_class, MKDEV(MAJOR(mydect),MINOR(mydect) + 3));	
+	
 	class_destroy(test_dev_class);
-	
-	
-	
-	
+
 }
 
 
