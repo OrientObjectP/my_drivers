@@ -85,7 +85,7 @@ static int __init chrdev_init(void)
 	
 
 
-	//自动生成主设备号和次设备号
+	//自动生成主设备号和次设备号，
 	retval = alloc_chrdev_region(&mydect,0, MYCOUNT, MYNAME);
 	if (retval<0) {
 		printk(KERN_ERR "Unable to alloc minors for test_device\n");
@@ -100,7 +100,7 @@ static int __init chrdev_init(void)
 	cdev_init(&test_device_cdev,&test_fops);
 	printk(KERN_ERR "cdev_init is succeed\n");	
 	
-	//利用cdev结构体和主次设备号注册驱动
+	//利用cdev结构体和主次设备号注册驱动，在/proc/device下就可以看到MYNAME的设备
 	retval = cdev_add(&test_device_cdev, mydect, MYCOUNT);
 	if (retval) {
 		printk(KERN_ERR "Unable to get usb_device major %d\n",
@@ -111,9 +111,12 @@ static int __init chrdev_init(void)
 		printk(KERN_ERR "cdev_add is succeed\n");
 
 	//注册完成设备驱动后，添加设备类的操作，以让内核帮我们发信心给udev，让udev自动创建和删除设备文件
+	//在/sys/class中会创建一个solitude_test文件夹
 	test_dev_class = class_create(THIS_MODULE, "solitude_test");
 	if (IS_ERR(test_dev_class))
 		return;
+	
+	//在/sys/class/solitude_test/下会创建多个文件，同时在/dev/下也会创建多个设备文件
 	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 0), NULL, "test0");    //最后一个参数就是在/dev/xx下的文件名
 	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 1), NULL, "test1");
 	device_create(test_dev_class, NULL, MKDEV(MAJOR(mydect),MINOR(mydect) + 2), NULL, "test2");
