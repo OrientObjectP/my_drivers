@@ -1,56 +1,41 @@
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/slab.h>
 #include <linux/fs.h>
-#include <linux/kdev_t.h>
+#include <linux/cdev.h>
+#include <linux/kernel.h>
 #include <asm/uaccess.h>
-#include <linux/semaphore.h>
+#include <linux/slab.h>
 #include<linux/device.h>
 
-#include "scull.h"
+#define SCULL_INIT 0
+#define SCULL_QSET 2000
+#define SCULL_QUANTUM 512
 
-//#define DEBUG
-#define NUM 4
-#define DEVNAME "scull"
+struct scull_qset {
+	void **data;
+	struct scull_qset *next;
+};
 
-#define MYNAME "scull"
-#define MYMAJOR 200
-#define MYMINOR 0
+struct scull_dev_st {
+	char mych[100];
+	int quantum;
+	int qset;
+	unsigned long size;
+	unsigned int access_key;
+	struct cdev cdev;
+};
+
+
+#define MYNAME "scull_test"
 #define MYCOUNT 3
 
-
-//DEFINE_SEMAPHORE(sem);
-
-dev_t scull_devnum;
-uint scull_major,scull_minor;
-struct scull_dev scull_dev;
-
 static struct class *test_dev_class;
+dev_t scull_devnum;
+struct scull_dev_st scull_dev;
 
-static void scull_trim(struct scull_dev *dev)
-{
-	int i;
-	struct scull_qset *dptr ,*next;
 
-	dptr = dev->data;
-	for (; dptr != NULL ;dptr = next) {
-		if (dptr->data) {
-			for (i = 0 ;i < dev->qset ;i++) {
-				kfree(dptr->data[i]);
-			}
-			kfree(dptr->data);
-			dptr->data = NULL;
-		}
-		next = dptr->next;
-		kfree(dptr);
-	}
-	dev->qset = SCULL_QSET;
-	dev->quantum = SCULL_QUANTUM;
-	dev->data = NULL;
-	dev->size = 0;
-}
-
-static struct scull_qset *scull_follow(struct scull_dev *dev,unsigned int item)
+/*
+static struct scull_qset *scull_follow(struct scull_dev_st *dev,unsigned int item)
 {
 	struct scull_qset *dptr = dev->data;
 
@@ -77,61 +62,31 @@ static struct scull_qset *scull_follow(struct scull_dev *dev,unsigned int item)
 	return dptr;
 }
 
-#ifdef DEBUG
-static void scull_mem_debug(struct scull_dev *dev)
-{
-	int i;
-	struct scull_qset *dptr,*next;
-		
-	for (dptr = dev->data; dptr ;dptr = next) {
-		if ((char *)dptr->data) {
-			for (i = 0; i < dev->qset ;i++) {
-				if ((char *)dptr->data[i]) {
-					printk(KERN_DEBUG "[i]: %s\n",(char *)dptr->data[i]);
-				}
-			}
-		}
-		next = dptr->next;
-		continue;
-	}
-}
-#endif
+*/
 
 static int scull_open(struct inode *inode, struct file *filp)
 {
-	struct scull_dev *dev;
-
-	dev = container_of(inode->i_cdev, struct scull_dev, cdev);
-	filp->private_data = dev;
 	
-	/*
-	if ((filp->f_flags & O_ACCMODE) == O_WRONLY) {
-		if (down_interruptible(&dev->sem))
-		    return -ERESTARTSYS;
-		scull_trim(dev);
-		up(&dev->sem);
-	}
-	*/
+	struct scull_dev_st *dev;
+
+	dev = container_of(inode->i_cdev, struct scull_dev_st, cdev);
+	filp->private_data = dev;
+
+	
 	return 0;
 }
 
 static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, loff_t *f_ops)
 {
-	struct scull_dev *dev;
-	struct scull_qset *dptr;
-	unsigned long itemsize;
-	unsigned int qset,quantum;
-	unsigned int s_pos,q_pos,reset,item;
+	
+	struct scull_dev_st *dev;
+
 
 	ssize_t retval = 0;
 
 	dev = filp->private_data;
-	qset = dev->qset;
-	quantum = dev->quantum;
-	itemsize = qset * quantum;
 
-	if (down_interruptible(&dev->sem))
-	    return -ERESTARTSYS;
+
 	
 	if (*f_ops > dev->size) {
 		printk(KERN_DEBUG "can not read beyond data length\n");
@@ -141,74 +96,35 @@ static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, 
 		count = dev->size - *f_ops;
 	}
 	
-	item = *f_ops / itemsize;
-	reset = *f_ops % itemsize;
-	s_pos = reset / quantum;
-	q_pos = reset % quantum;
 
-#ifdef DEBUG
-	scull_mem_debug(dev);
-#endif
-	dptr = scull_follow(dev,item);
-	if (!dptr || !dptr->data || !dptr->data[s_pos]) {
-		goto out;
-	}
-	if (count > quantum - q_pos) {
-		count = quantum - q_pos;
-	}
-	if(copy_to_user(buffer, dptr->data[s_pos] + q_pos, count)) {
+
+
+	if(copy_to_user(buffer, dev->mych + *f_ops, count)) {
 		printk(KERN_DEBUG "copy_to_user failed\n");
 		goto out;
 	}
 	*f_ops += count;
 	retval = count;
 out:
-	up(&dev->sem);
+
 	return retval;
+	
+	
 }
 
 static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_ops)
 {
-	struct scull_dev *dev;
-	struct scull_qset *dptr;
-	unsigned long itemsize;
-	unsigned int qset,quantum;
-	unsigned int s_pos,q_pos,reset,item;
-
-	ssize_t retval = -ENOMEM;
-
+	
+	int retval=0;
+	struct scull_dev_st *dev;
 	dev = filp->private_data;
-	qset = dev->qset;
-	quantum = dev->quantum;
-	itemsize = qset * quantum;
 
-	if (down_interruptible(&dev->sem))
-	    return -ERESTARTSYS;
+	if (*f_ops>100)
+		retval = 200;
+	if( *f_ops + count > 100)
+		count = 100 - *f_ops;
 
-	item = *f_ops / itemsize;
-	reset = *f_ops % itemsize;
-	s_pos = reset / quantum;
-	q_pos = reset % quantum;
-
-	dptr = scull_follow(dev, item);
-	if (!dptr)
-		goto out;
-	if (!dptr->data) {
-		dptr->data = kmalloc(qset * sizeof(char *), GFP_KERNEL);
-		if (!dptr->data)
-			goto out;
-		memset(dptr->data, 0, qset * sizeof(char *));
-	}
-	if (!dptr->data[s_pos]) {
-		dptr->data[s_pos] = kmalloc(quantum, GFP_KERNEL);
-		if (!dptr->data[s_pos])
-			goto out;
-		memset(dptr->data[s_pos], '\0', quantum);
-	}
-	if (count > quantum - q_pos)
-		count = quantum - q_pos;
-	if (copy_from_user(dptr->data[s_pos] + q_pos, buffer, count)) {
-		retval = -EFAULT;
+	if (copy_from_user(dev->mych + *f_ops, buffer, count)) {
 		goto out;
 	}
 	*f_ops += count;
@@ -216,101 +132,83 @@ static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t 
 	
 	if (dev->size < *f_ops)
 		dev->size = *f_ops;
-#ifdef DEBUG
-	scull_mem_debug(dev);
-#endif
+
 out:
-	up(&dev->sem);
 	return retval;
+	
 }
 
-static long scull_ioctl(struct file *filp, unsigned int command, unsigned long arg)
-{
 
-	return (long)0;
-}
 
-static loff_t scull_llseek(struct file *filp, loff_t offset, int where)
-{
-	return 0;
-}
 
-static int scull_release(struct inode *inode, struct file *filp)
-{
-	return 0;
-}
+
 
 struct file_operations scull_ops = {
 	.owner		    = THIS_MODULE,
 	.open		    = scull_open,
 	.read		    = scull_read,
 	.write		    = scull_write,
-	.unlocked_ioctl	    = scull_ioctl,
-	.llseek		    = scull_llseek,
-	.release	    = scull_release,
 };
 
-/*
-static int scull_init_dev(void)
-{
-	int ret;
-	if (scull_major) {
-		ret = register_chrdev_region(MKDEV(scull_major,0), 1, DEVNAME);
-		scull_devnum = MKDEV(scull_major,0);
-	} else {
-		ret = alloc_chrdev_region(&scull_devnum, 0, 1, DEVNAME);
-		scull_major = MAJOR(scull_devnum);
-		scull_minor = MINOR(scull_devnum);
-	}
 
-	if (ret)
-		printk(KERN_ERR "register device failed\n");
-
-	printk(KERN_DEBUG "register_chrdev_region success\n");
-	return ret;
-}
-*/
-
-/*
-static void scull_setup_dev(struct scull_dev *dev)
-{
-	if (scull_init_dev()) {
-		printk(KERN_DEBUG "scull_init_dev failed\n");
-		unregister_chrdev_region(scull_devnum, 1);
-	}
-	dev->data = NULL;
-	dev->qset = SCULL_QSET;
-	dev->quantum = SCULL_QUANTUM;
-	dev->size = 0;
-	sema_init(&dev->sem, 1);
-	cdev_init(&dev->cdev, &scull_ops);
-	dev->cdev.owner = THIS_MODULE;
-	dev->cdev.ops = &scull_ops;
-	if (cdev_add(&dev->cdev, scull_devnum, 1)) {
-		printk(KERN_DEBUG "cdev add failed\n");
-		unregister_chrdev_region(scull_devnum, 1);
-	}
-	printk(KERN_DEBUG "cdev_add success\n");
-}
-
-*/
 static int __init scull_init(void)
 {
-	/*
-	scull_major = SCULL_INIT;
-	scull_minor = SCULL_INIT;
-	memset(&scull_dev,0,sizeof(struct scull_dev));
-	scull_setup_dev(&scull_dev);
-	printk(KERN_DEBUG "scull driver init\n");
-	*/
 	
 	printk(KERN_ALERT "chrdev_init helloworld init\n");
-	int retval;
+	int retval = 0;
 	
-	//初始化scull_dev
-	memset(&scull_dev,0,sizeof(struct scull_dev));
+	//自动生成主设备号和次设备号，
+	retval = alloc_chrdev_region(&scull_devnum,0, MYCOUNT, MYNAME);
+	if (retval<0) {
+		printk(KERN_ERR "Unable to alloc minors for test_device\n");
+		return 0;
+	}
+	else {
+		printk(KERN_ERR "alloc_chrdev_region is succeed\n");
+		printk(KERN_ERR "MAJOR=%d,MINOR=%d\n",MAJOR(scull_devnum),MINOR(scull_devnum));		
+	}
+	
+
+	scull_dev.size = 0;
+	
+	cdev_init(&(scull_dev.cdev), &scull_ops);
+	scull_dev.cdev.owner = THIS_MODULE;
+	scull_dev.cdev.ops = &scull_ops;		
+	printk(KERN_ERR "scull_dev & cdev_init is succeed\n");		
+	
+	retval = cdev_add(&(scull_dev.cdev), scull_devnum, MYCOUNT);
+	if (retval) {
+		printk(KERN_ERR "Unable to get usb_device major %d\n",
+		       MAJOR(scull_devnum));
+		return 0;
+	}
+	else
+		printk(KERN_ERR "cdev_add is succeed\n");
+	
+	
+	
+	
+	test_dev_class = class_create(THIS_MODULE, "solitude_scull");
+	if (IS_ERR(test_dev_class))
+		return;
+	
+	//在/sys/class/solitude_test/下会创建多个文件，同时在/dev/下也会创建多个设备文件
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 0), NULL, "scull0");    //最后一个参数就是在/dev/xx下的文件名
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 1), NULL, "scull1");
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 2), NULL, "scull2");
+	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 3), NULL, "scull3");	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 		
+		/*
 	//自动生成主设备号和次设备号，
 	retval = alloc_chrdev_region(&scull_devnum,0, MYCOUNT, MYNAME);
 	if (retval<0) {
@@ -355,12 +253,13 @@ static int __init scull_init(void)
 	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 2), NULL, "test2");
 	device_create(test_dev_class, NULL, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 3), NULL, "test3");	
 		
-	
+	*/
 	return 0;
 }
 
 static void __exit scull_exit(void)
 {
+	/*
 	scull_trim(&scull_dev);
 	
 	cdev_del(&scull_dev.cdev);	
@@ -370,15 +269,38 @@ static void __exit scull_exit(void)
 	printk(KERN_ERR "unregister_chrdev_region is succeed\n");	
 	
 	//自动删除设备文件
+
+	*/
+	printk(KERN_DEBUG "scull driver exit\n");
+	
+	
+	cdev_del(&(scull_dev.cdev));
+	printk(KERN_ERR "cdev_del is succeed\n");	
+	
+	unregister_chrdev_region(scull_devnum, MYCOUNT);	
+	printk(KERN_ERR "unregister_chrdev_region is succeed\n");		
+	
+	
 	device_destroy(test_dev_class, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 0));
 	device_destroy(test_dev_class, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 1));	
 	device_destroy(test_dev_class, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 2));	
 	device_destroy(test_dev_class, MKDEV(MAJOR(scull_devnum),MINOR(scull_devnum) + 3));	
 	
-	class_destroy(test_dev_class);	
-	printk(KERN_DEBUG "scull driver exit\n");
+	class_destroy(test_dev_class);		
+	
+	
+	
+	
+	
 }
-MODULE_AUTHOR("solitude");
-MODULE_LICENSE("GPL");				// 描述模块的许可证
+
+
+
 module_init(scull_init);
 module_exit(scull_exit);
+
+// MODULE_xxx这种宏作用是用来添加模块描述信息
+MODULE_LICENSE("GPL");				// 描述模块的许可证
+MODULE_AUTHOR("solitude-ubuntu");				// 描述模块的作者
+MODULE_DESCRIPTION("module test");	// 描述模块的介绍信息
+MODULE_ALIAS("alias xxx");			// 描述模块的别名信息
