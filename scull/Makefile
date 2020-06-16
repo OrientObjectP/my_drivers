@@ -13,7 +13,7 @@ obj-m	+= scull.o
 
 all:
 	make -C $(KERN_DIR) M=`pwd` modules
-
+	gcc app.c -o app
 cp:
 	cp *.ko /root/porting_x210/rootfs/rootfs/driver_test
 
@@ -23,3 +23,4 @@ cp:
 .PHONY: clean	
 clean:
 	make -C $(KERN_DIR) M=`pwd` modules clean
+	rm app
