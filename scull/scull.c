@@ -98,8 +98,7 @@ static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, 
 		goto out;
 	}
 	if (*f_ops + count > dev->size) {
-		count = dev->size - *f_ops;
-		printk(KERN_DEBUG "*f_ops + count > dev->size. count=%d\n",count);	
+		count = dev->size - *f_ops;	
 	}
 	
 
@@ -112,8 +111,6 @@ static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, 
 
 	*f_ops += count;
 	retval = count;
-	printk(KERN_DEBUG "copy_to_user succeeded\n");	
-	printk(KERN_DEBUG "*f_ops=%d\n",*f_ops);		
 
 
 out:
@@ -142,12 +139,10 @@ static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t 
 
     //down(&(dev->sem));
 	if(dev->mych[0]=='Q')
-		printk(KERN_DEBUG "ev->mych[0]=='Q',my pid = %d\n",current->pid);	
+		printk(KERN_DEBUG "my pid = %d,dev->mych[0]=='Q'\n",current->pid);	
 	else
-		printk(KERN_DEBUG "ev->mych[0]!='Q',my pid = %d\n",current->pid);	
+		printk(KERN_DEBUG "my pid = %d,dev->mych[0]!='Q'\n",current->pid);	
 
-	printk("down-my_pid=%d\n",current->pid);
-	printk(KERN_INFO "The cuurent process commond ： \"%s\"  the pid ：%x\n", current->comm, current->pid);	
 	if (*f_ops>100)
 		retval = 200;
 	if( *f_ops + count > 100)
@@ -160,13 +155,9 @@ static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t 
 	
 	if (dev->size < *f_ops)
 		dev->size = *f_ops;	
-		
-	printk(KERN_DEBUG "writeeeee*f_ops=%d\n",*f_ops);	
-	printk(KERN_INFO "The cuurent process commond ： %s  the pid ：%x\n", current->comm, current->pid);		
-	printk("  up-my_pid=%d\n",current->pid);
-
-
+	printk(KERN_DEBUG "my pid = %d,udelay begin\n",current->pid);	
 	udelay(5000);
+	printk(KERN_DEBUG "my pid = %d,udelay end  \n",current->pid);		
 	dev->mych[0] = 'Q';
     //up(&(dev->sem));	
 		
