@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/types.h>
 
+
 #define PATH1 "/dev/scull1"
 #define PATH2 "/dev/scull2"
 
@@ -23,13 +24,27 @@ int main(void)
 		wbuf2[i] = 'A' + i % 26;
 	}    
 
-    int fd1 = open(PATH1,O_RDWR);
-    int fd2 = open(PATH2,O_RDWR);
+    int pid = fork();
 
-    write(fd1,wbuf1,10);
-    write(fd2,wbuf2,50);
-    read(fd1,r1buf,20);
-    printf("r2buf*****%s\n",r1buf);
+    if (pid == 0)
+    {    
+        int fd1 = open(PATH1,O_RDWR);
+        write(fd1,wbuf1,30);
+        int fd2 = open(PATH1,O_RDWR);
+        read(fd2,r1buf,40);
+        printf("pid==0,r1buf*****%s\n",r1buf);       
+    }
+
+    else
+    {
+        int fd1 = open(PATH1,O_RDWR);    
+        write(fd1,wbuf2,30);
+        int fd2 = open(PATH1,O_RDWR);
+        read(fd2,r1buf,40);
+        printf("pid==1,r1buf*****%s\n",r1buf);  
+    }
+  
+
 
 
     return 0;
