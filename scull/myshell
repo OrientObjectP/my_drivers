@@ -1,0 +1,6 @@
+#!/bin/bash
+rmmod scull
+insmod scull.ko
+rm app
+gcc app.c -o app
+./app
