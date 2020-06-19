@@ -6,11 +6,15 @@
 #include <asm/uaccess.h>
 #include <linux/slab.h>
 #include<linux/device.h>
+#include <linux/semaphore.h>
+#include <linux/sched.h>
+#include <linux/delay.h>
 
 #define SCULL_INIT 0
 #define SCULL_QSET 2000
 #define SCULL_QUANTUM 512
 
+ 
 struct scull_qset {
 	void **data;
 	struct scull_qset *next;
@@ -22,6 +26,7 @@ struct scull_dev_st {
 	int qset;
 	unsigned long size;
 	unsigned int access_key;
+	struct semaphore sem;
 	struct cdev cdev;
 };
 
@@ -94,6 +99,7 @@ static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, 
 	}
 	if (*f_ops + count > dev->size) {
 		count = dev->size - *f_ops;
+		printk(KERN_DEBUG "*f_ops + count > dev->size. count=%d\n",count);	
 	}
 	
 
@@ -103,8 +109,13 @@ static ssize_t scull_read(struct file *filp, char __user *buffer, size_t count, 
 		printk(KERN_DEBUG "copy_to_user failed\n");
 		goto out;
 	}
+
 	*f_ops += count;
 	retval = count;
+	printk(KERN_DEBUG "copy_to_user succeeded\n");	
+	printk(KERN_DEBUG "*f_ops=%d\n",*f_ops);		
+
+
 out:
 
 	return retval;
@@ -114,16 +125,33 @@ out:
 
 static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_ops)
 {
+
 	
+
+
+
+
+
+
 	int retval=0;
 	struct scull_dev_st *dev;
 	dev = filp->private_data;
 
+
+
+
+    //down(&(dev->sem));
+	if(dev->mych[0]=='Q')
+		printk(KERN_DEBUG "ev->mych[0]=='Q',my pid = %d\n",current->pid);	
+	else
+		printk(KERN_DEBUG "ev->mych[0]!='Q',my pid = %d\n",current->pid);	
+
+	printk("down-my_pid=%d\n",current->pid);
+	printk(KERN_INFO "The cuurent process commond ： \"%s\"  the pid ：%x\n", current->comm, current->pid);	
 	if (*f_ops>100)
 		retval = 200;
 	if( *f_ops + count > 100)
 		count = 100 - *f_ops;
-
 	if (copy_from_user(dev->mych + *f_ops, buffer, count)) {
 		goto out;
 	}
@@ -131,7 +159,19 @@ static ssize_t scull_write(struct file *filp, const char __user *buffer, size_t 
 	retval = count;
 	
 	if (dev->size < *f_ops)
-		dev->size = *f_ops;
+		dev->size = *f_ops;	
+		
+	printk(KERN_DEBUG "writeeeee*f_ops=%d\n",*f_ops);	
+	printk(KERN_INFO "The cuurent process commond ： %s  the pid ：%x\n", current->comm, current->pid);		
+	printk("  up-my_pid=%d\n",current->pid);
+
+
+	udelay(5000);
+	dev->mych[0] = 'Q';
+    //up(&(dev->sem));	
+		
+
+
 
 out:
 	return retval;
@@ -200,7 +240,7 @@ static int __init scull_init(void)
 	
 	
 	
-	
+	sema_init(&(scull_dev.sem),1);
 	
 	
 	
